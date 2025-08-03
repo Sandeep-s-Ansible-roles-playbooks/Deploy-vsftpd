@@ -1,0 +1,56 @@
+---
+- name: Install a package on RPM and DEB systems
+  hosts: '*'
+  become: yes  
+  become_user: root
+  become_method: sudo  
+  vars:
+    package_name: vsftpd  
+
+  tasks:
+    - name: Gather OS-specific facts
+      setup:  
+      register: os_facts
+
+    - name: Install package on DEB-based systems (e.g., Ubuntu/Debian)
+      apt:
+        name: "{{ package_name }}"  
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"  
+      register: package_install_result
+
+    - name: Install package on RPM-based systems (e.g., CentOS/RedHat)
+      yum:
+        name: "{{ package_name }}"  
+        state: present
+      when: ansible_os_family == "RedHat"  
+      register: package_install_result
+
+    - name: Display message if the package was installed
+      debug:
+        msg: "Package '{{ package_name }}' was successfully installed."
+      when: package_install_result.changed  
+
+    - name: Display message if the package was already present
+      debug:
+        msg: "Package '{{ package_name }}' was already installed."
+      when: not package_install_result.changed  
+    
+    - name: Check if the service is running 
+      shell: systemctl is-active {{ package_name }}
+      register: service_status
+      changed_when: false
+      failed_when: false
+
+    - name: Start the service if not running
+      service:
+        name: "{{ package_name }}"
+        state: started
+      when: service_status.stdout != "active"
+
+    - name: Ensure the service for the package is started and enabled
+      service:
+        name: "{{ package_name }}"
+        state: started
+        enabled: yes
